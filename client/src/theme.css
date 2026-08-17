@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* White-label theme: instance branding overrides these variables at runtime
+   (Layout fetches /api/settings/branding and sets them on :root). */
+:root {
+  --brand: 37 99 235; /* blue-600 */
+  --brand-soft: 219 234 254; /* blue-100 */
+  --brand-fg: 255 255 255;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}
+
+/* Minimal prose styling for rendered markdown */
+.prose-support h1 { @apply text-2xl font-bold mt-6 mb-3; }
+.prose-support h2 { @apply text-xl font-semibold mt-5 mb-2; }
+.prose-support h3 { @apply text-lg font-semibold mt-4 mb-2; }
+.prose-support p { @apply my-2 leading-relaxed; }
+.prose-support ul { @apply list-disc pl-6 my-2; }
+.prose-support ol { @apply list-decimal pl-6 my-2; }
+.prose-support code { @apply bg-gray-100 rounded px-1 py-0.5 text-sm font-mono; }
+.prose-support pre { @apply bg-gray-900 text-gray-100 rounded-lg p-3 my-3 overflow-x-auto text-sm; }
+.prose-support pre code { @apply bg-transparent p-0 text-gray-100; }
+.prose-support a { @apply text-brand underline; }
+.prose-support blockquote { @apply border-l-4 border-gray-300 pl-3 my-2 text-gray-600; }
