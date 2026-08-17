@@ -14,24 +14,24 @@
 
 ## Recommended shape: modular monolith, boring stack
 
-One deployable application with clear internal module boundaries (ticketing, KB, SOP, identity, SLA engine, AI) — not microservices. A support platform's modules are tightly coupled by data (tickets reference articles, SOPs, schedules, companies); a monolith keeps every promise in the feature spec one JOIN away, and keeps self-hosted deployment to **one container + one database**.
+One deployable application with clear internal module boundaries (ticketing, KB, SOP, identity, SLA engine) — not microservices. A support platform's modules are tightly coupled by data (tickets reference articles, SOPs, schedules, companies); a monolith keeps every promise in the feature spec one JOIN away, and keeps self-hosted deployment to **one container + one database**. For an open-source project this is also the sustainability choice: one codebase contributors can hold in their head.
 
 ### Core stack
 
 - **Backend: TypeScript (Node/NestJS or equivalent) or Go.** Either supports the single-binary/single-container goal. TypeScript maximizes hiring pool and shares types end-to-end with the frontend; Go gives the smallest ops footprint (Libredesk proves the model). Decide by team skills — both are defensible; what matters is *one* language for the backend, not a polyglot spread.
 - **Database: PostgreSQL for everything.**
   - Relational core (tickets, users, companies, articles, SOPs, schedules, SLA policies).
-  - **Full-text search via `tsvector` + hybrid semantic search via `pgvector`** — this is the load-bearing choice that avoids the Elasticsearch tax while still delivering the hybrid keyword+semantic search the KB spec requires. Embeddings for articles and tickets live in the same database as the data they index.
+  - **Search via `tsvector` (full-text) + `pg_trgm` (typo tolerance) + synonym dictionaries** — the load-bearing choice that avoids the Elasticsearch tax entirely. No embeddings, no vector store, no model dependency: the spec's search promises (typo-tolerant, synonym-aware, instant) are classic information-retrieval engineering, all native to Postgres.
   - Revision history (KB versioning, SOP versions, audit trails) as append-only tables.
-- **Cache/queue: Redis** (job queue for email ingest, SLA timer evaluation, webhooks, AI calls) — acceptable second dependency; skip it only if Go's in-process scheduling proves sufficient.
+- **Cache/queue: Redis** (job queue for email ingest, SLA timer evaluation, webhooks) — acceptable second dependency; skip it only if Go's in-process scheduling proves sufficient.
 - **Frontend: React + TypeScript SPA** (Vite), with the command palette, keyboard triage, and real-time updates (WebSocket/SSE) as first-class concerns from the start — retrofitting keyboard-first UX later never works.
 - **Email**: inbound via provider webhooks (Postmark/SES) with a self-hosted SMTP/IMAP fallback; outbound with per-workspace DKIM. Email threading correctness (References/In-Reply-To) is a known incumbent sore spot — treat it as a tested module, not glue code.
-- **File storage**: S3-compatible (MinIO when self-hosted).
-- **AI layer**: provider-agnostic gateway (Claude/OpenAI/local models) so self-hosters can bring their own keys. RAG pipeline: article/ticket chunking → pgvector → retrieval with citation tracking. Per-workspace token accounting from day one — this is what makes "AI included, hard caps, no surprise bills" operable, and it feeds the unit-economics model the open-questions doc demands.
+- **File storage**: local disk by default, S3-compatible (MinIO) optional — a small self-hosted install should need nothing but the container and Postgres.
+- **No AI layer.** This is architectural, not just positional: no model gateway, no vector pipeline, no inference budget, no external API dependency, nothing that can hallucinate in front of a customer. It removes an entire class of cost, complexity, and privacy surface — and it is the product's headline promise made structural.
 
-### Multi-tenancy
+### Tenancy & branding
 
-Single shared schema keyed by `workspace_id` with Postgres **row-level security** as a second enforcement layer. This serves SaaS cheaply and lets a self-hosted instance be one tenant of the same codebase — one codebase, both business models, deferring the SaaS-vs-self-hosted decision the research left open without forking the architecture.
+**Single-tenant per install**: one instance = one business, fully white-labeled. Branding (product name, logo, favicon, theme colors, email templates and sender domain, portal domains) is **instance configuration stored as data — never a fork** — so every rebranded deployment stays on the stock upgrade path. Within an instance, **multi-brand** (multiple help centers/portals sharing one agent workspace) covers businesses with several products. Running five businesses means five independent installs, each under its own brand — isolation by default, no tenancy code to get wrong, no cross-business data risk.
 
 ### The SLA/business-hours engine (deserves first-class design)
 
@@ -42,18 +42,26 @@ Single shared schema keyed by `workspace_id` with Postgres **row-level security*
 
 ### Identity & permissions
 
-- Sessions + OAuth; SSO (SAML/OIDC) **not paywalled** when it ships (Chatwoot's paywalled-SSO resentment is a warning).
+- Sessions + OAuth; SSO (SAML/OIDC) ships free like everything else (Chatwoot's paywalled-SSO resentment is the canonical warning).
 - Authorization as a central policy module implementing the two-axis model (role × scope) and the audience model (public / customers / company-scoped / internal) shared by KB and SOP content. One implementation, used everywhere — permission drift across modules is how incumbents ended up with segment/role/scope sprawl.
 
 ### What we deliberately do NOT build
 
-- **No Elasticsearch** — pgvector + tsvector until proven insufficient at scale.
+- **No AI — ever.** No chatbots, no generated replies, no embeddings. The Human Guarantee (feature spec, Module 6) is enforced by architecture: the capability simply does not exist in the codebase.
+- **No Elasticsearch** — tsvector + pg_trgm until proven insufficient at scale.
 - **No microservices, no Kafka** — a queue table + Redis covers webhook fan-out and email ingest for years.
 - **No plugin marketplace at launch** — REST API + webhooks + a handful of first-party integrations (Slack, Jira/GitHub sync — the most-requested integration in the OSS research).
-- **No per-feature license gates in the self-hosted build** — whatever the business model becomes, crippling self-hosted basics is the documented path to community backlash.
+- **No open-core, no license gates, no enterprise edition** — every feature in the public repo, forever. Crippling self-hosted basics is the documented path to community backlash (Chatwoot), and "no open-core, ever" is a proven differentiator (Libredesk).
+
+## License & sustainability (the "evergreen" engineering)
+
+- **License: AGPL-3.0 recommended** — the license of Zammad, FreeScout, and Libredesk. It keeps the project genuinely open while preventing a third party from closing it up as a proprietary hosted service. (MIT maximizes adoption but invites exactly that; the OSS survey shows AGPL is the community norm for this category.)
+- **Outlive any single maintainer**: the Peppermint archive and Papercups shutdown are the category's cautionary tales. Counters: boring long-lived dependencies, high test coverage on the money paths (email threading, SLA math, permissions), architecture docs in-repo, CONTRIBUTING with a real on-ramp, and conventional code over cleverness — a contributor should be productive in an evening.
+- **Upgrades as a feature**: versioned migrations, one-command upgrade, release notes for every release, no breaking config changes without a deprecation cycle. An instance set up in 2026 should upgrade cleanly for a decade — that is what "evergreen" means operationally.
+- **No telemetry by default**; opt-in only and transparent.
 
 ## Deployment story
 
 - **Self-hosted**: `docker compose up` → app + Postgres (+ Redis). Target < 1 GB RAM at small scale — matching the bar FreeScout/Libredesk set and Zammad fails.
-- **Cloud/SaaS**: the same image behind a load balancer; workspace = tenant.
+- One image, many brands: each business runs its own fully-rebranded instance of the same image.
 - Nightly-tested one-command upgrades and importers (Zendesk/Freshdesk) as first-class release artifacts.
