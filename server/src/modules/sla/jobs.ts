@@ -4,19 +4,27 @@
  * - 'sla.sweep' runs every minute (self-re-enqueueing, deduped): flags newly breached
  *   tickets via lib/sla sweepBreaches, records audit events, emits 'sla.breach', and
  *   schedules per-policy escalation ('sla.escalate') and pre-breach warning ('sla.warn')
- *   notifications from the policy's slaEscalations rows.
+ *   notifications from the policy's slaEscalations rows. The sweep also evaluates the
+ *   periodic_update metric: new/open tickets whose policy sets a periodic_update target
+ *   for their priority must get a public agent update every N minutes — when the silence
+ *   exceeds the target, the assignee (supervisors when unassigned) is mailed once per
+ *   silence window, with an 'sla_periodic_due' audit row and an 'sla.warning' bus event.
  * - 'sla.warn' / 'sla.escalate' re-check the ticket still has the due unmet before mailing
  *   the assignee (and supervisors / extra users when the escalation says so) — a satisfied
  *   or extended SLA silently cancels the notification.
+ * - Settings key 'notifications' ({ slaWarning: { enabled }, slaBreach: { enabled } })
+ *   gates the *emails* only — audit rows and bus events still happen so automations and
+ *   the ticket timeline stay complete. A missing key or field means enabled.
  *
  * Every mail is an internal staff notification; the audit trail lives in ticket_events.
  */
 import { and, eq, gte, inArray, isNotNull, lte } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { bus } from '../../lib/events.js';
+import { businessMinutesBetween, type BusinessSchedule } from '../../lib/hours.js';
 import { enqueueJob, registerJobHandler } from '../../lib/jobs.js';
 import { sendMail } from '../../lib/mailer.js';
-import { sweepBreaches } from '../../lib/sla.js';
+import { loadBusinessSchedule, sweepBreaches } from '../../lib/sla.js';
 
 const SWEEP_INTERVAL_MS = 60_000;
 const WARNING_LOOKAHEAD_MS = 120 * 60_000;
@@ -54,6 +62,27 @@ async function escalationsForPolicy(policyId: string) {
     .select()
     .from(schema.slaEscalations)
     .where(eq(schema.slaEscalations.policyId, policyId));
+}
+
+/** Email on/off switches from the settings key 'notifications'. Missing key/fields = enabled. */
+async function notificationToggles(): Promise<{ slaWarning: boolean; slaBreach: boolean }> {
+  try {
+    const [row] = await db
+      .select()
+      .from(schema.settings)
+      .where(eq(schema.settings.key, 'notifications'))
+      .limit(1);
+    const v = (row?.value ?? {}) as {
+      slaWarning?: { enabled?: boolean };
+      slaBreach?: { enabled?: boolean };
+    };
+    return {
+      slaWarning: v.slaWarning?.enabled !== false,
+      slaBreach: v.slaBreach?.enabled !== false,
+    };
+  } catch {
+    return { slaWarning: true, slaBreach: true };
+  }
 }
 
 interface NotifyPayload {
@@ -162,8 +191,15 @@ async function handleNotification(kind: 'warn' | 'escalate', payload: Record<str
     `This is an automated SLA notification for the support team.`,
   ].join('\n');
 
-  for (const to of recipients) {
-    await sendMail({ to, subject, text, ticketId: ticket.id });
+  // Warnings ride the slaWarning toggle, breach escalations the slaBreach toggle.
+  const toggles = await notificationToggles();
+  const emailEnabled = kind === 'warn' ? toggles.slaWarning : toggles.slaBreach;
+  const notified: string[] = [];
+  if (emailEnabled) {
+    for (const to of recipients) {
+      await sendMail({ to, subject, text, ticketId: ticket.id });
+      notified.push(to);
+    }
   }
 
   await db.insert(schema.ticketEvents).values({
@@ -173,7 +209,7 @@ async function handleNotification(kind: 'warn' | 'escalate', payload: Record<str
       metric: parsed.metric,
       level: parsed.level,
       dueAt: dueAt.toISOString(),
-      notified: recipients,
+      notified,
     },
   });
 
@@ -184,6 +220,152 @@ async function handleNotification(kind: 'warn' | 'escalate', payload: Record<str
       metric: parsed.metric,
       level: parsed.level,
       dueAt: dueAt.toISOString(),
+    });
+  }
+}
+
+/** Periodic-update recipients: the assignee, or supervisors/admins when unassigned (or unmailable). */
+async function periodicRecipients(ticket: Ticket): Promise<string[]> {
+  if (ticket.assigneeId) {
+    const [assignee] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, ticket.assigneeId))
+      .limit(1);
+    if (assignee?.active && assignee.email) return [assignee.email];
+  }
+  const supervisors = await db
+    .select()
+    .from(schema.users)
+    .where(
+      and(
+        eq(schema.users.kind, 'staff'),
+        inArray(schema.users.role, ['supervisor', 'admin']),
+        eq(schema.users.active, true),
+        isNotNull(schema.users.email)
+      )
+    );
+  const emails = new Set<string>();
+  for (const s of supervisors) if (s.email) emails.add(s.email);
+  return [...emails];
+}
+
+/**
+ * Periodic-update pass: a new/open ticket whose policy sets a periodic_update target for
+ * its priority must receive a public agent update every N minutes (business or calendar
+ * minutes per the target). Silence is measured from max(lastPublicReplyAt, createdAt).
+ */
+async function sweepPeriodicUpdates(now: Date): Promise<void> {
+  const tickets = await db
+    .select()
+    .from(schema.tickets)
+    .where(
+      and(
+        inArray(schema.tickets.status, ['new', 'open']),
+        isNotNull(schema.tickets.slaPolicyId)
+      )
+    );
+  if (!tickets.length) return;
+
+  const policyIds = [...new Set(tickets.map((t) => t.slaPolicyId).filter((id): id is string => id != null))];
+  if (!policyIds.length) return;
+  const targets = await db
+    .select()
+    .from(schema.slaTargets)
+    .where(
+      and(
+        inArray(schema.slaTargets.policyId, policyIds),
+        eq(schema.slaTargets.metric, 'periodic_update')
+      )
+    );
+  if (!targets.length) return;
+
+  const toggles = await notificationToggles();
+
+  // Schedules repeat across tickets — load each at most once per sweep.
+  const scheduleCache = new Map<string, BusinessSchedule>();
+  const cachedSchedule = async (scheduleId: string | null): Promise<BusinessSchedule> => {
+    const key = scheduleId ?? '';
+    let sched = scheduleCache.get(key);
+    if (!sched) {
+      sched = await loadBusinessSchedule(scheduleId);
+      scheduleCache.set(key, sched);
+    }
+    return sched;
+  };
+
+  for (const ticket of tickets) {
+    const target = targets.find(
+      (t) => t.policyId === ticket.slaPolicyId && t.priority === ticket.priority
+    );
+    if (!target || target.minutes <= 0) continue;
+
+    const anchor =
+      ticket.lastPublicReplyAt && ticket.lastPublicReplyAt > ticket.createdAt
+        ? ticket.lastPublicReplyAt
+        : ticket.createdAt;
+    const elapsed = target.useBusinessHours
+      ? businessMinutesBetween(anchor, now, await cachedSchedule(ticket.scheduleId))
+      : Math.floor((now.getTime() - anchor.getTime()) / 60_000);
+    if (elapsed < target.minutes) continue;
+
+    // Dedupe on the audit row, not an enqueueJob dedupeKey: the jobs unique index only
+    // holds while a job is *pending*, so one sweep after the notify job completed the
+    // same bucket key would re-enqueue and nag every minute. The sla_periodic_due
+    // ticket_events row is permanent, survives restarts, and resets itself — the next
+    // public reply moves the anchor past any earlier row, re-arming the check.
+    const [already] = await db
+      .select({ id: schema.ticketEvents.id })
+      .from(schema.ticketEvents)
+      .where(
+        and(
+          eq(schema.ticketEvents.ticketId, ticket.id),
+          eq(schema.ticketEvents.type, 'sla_periodic_due'),
+          gte(schema.ticketEvents.createdAt, anchor)
+        )
+      )
+      .limit(1);
+    if (already) continue;
+
+    const recipients = await periodicRecipients(ticket);
+    const subject = `[SLA] #${ticket.number} periodic update due`;
+    const cadence = `${target.minutes}${target.useBusinessHours ? ' business' : ''} min`;
+    const text = [
+      `Ticket #${ticket.number}: ${ticket.subject}`,
+      ``,
+      `SLA periodic update due — no public update for about ${elapsed} min (target: every ${cadence}).`,
+      `Status: ${ticket.status} · Priority: ${ticket.priority}`,
+      ``,
+      `This is an automated SLA notification for the support team.`,
+    ].join('\n');
+
+    const notified: string[] = [];
+    if (toggles.slaWarning) {
+      for (const to of recipients) {
+        await sendMail({ to, subject, text, ticketId: ticket.id });
+        notified.push(to);
+      }
+    }
+
+    await db.insert(schema.ticketEvents).values({
+      ticketId: ticket.id,
+      type: 'sla_periodic_due',
+      data: {
+        metric: 'periodic_update',
+        targetMinutes: target.minutes,
+        elapsedMinutes: elapsed,
+        useBusinessHours: target.useBusinessHours,
+        since: anchor.toISOString(),
+        notified,
+      },
+    });
+
+    bus.emitEvent('sla.warning', {
+      ticketId: ticket.id,
+      number: ticket.number,
+      metric: 'periodic_update',
+      targetMinutes: target.minutes,
+      elapsedMinutes: elapsed,
     });
   }
 }
@@ -255,6 +437,8 @@ async function runSweep(): Promise<void> {
       );
     }
   }
+
+  await sweepPeriodicUpdates(now);
 }
 
 export function registerSlaJobs(): void {

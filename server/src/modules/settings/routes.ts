@@ -1,7 +1,9 @@
 /**
- * Instance settings: branding/white-label, automation rules, outbound webhooks,
- * search synonyms, and the outbound email audit log. The automations engine and
- * webhook fan-out are wired to the event bus when this plugin registers.
+ * Instance settings: branding/white-label (colors + font), email template
+ * customization, staff alert controls, automation rules, outbound webhooks,
+ * search synonyms, and the outbound email audit log. The automations engine,
+ * alert notifications, and webhook fan-out are wired to the event bus when
+ * this plugin registers.
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -10,11 +12,23 @@ import { db, schema } from '../../db/index.js';
 import { badRequest, notFound, parse } from '../../lib/http.js';
 import { requireAdmin, requireAgent, requireStaff, requireSupervisor } from '../../lib/auth.js';
 import {
+  DEFAULT_TEMPLATES,
+  sendTemplatedMail,
+  type EmailTemplate,
+} from '../../lib/mailer.js';
+import {
   AUTOMATION_EVENTS,
   actionsSchema,
   conditionsSchema,
   registerAutomationEngine,
 } from './automations.js';
+import {
+  loadNotificationSettings,
+  mergeNotificationSettings,
+  notificationsPutSchema,
+  registerNotifications,
+  saveNotificationSettings,
+} from './notifications.js';
 
 const idParams = z.object({ id: z.string().uuid() });
 
@@ -28,6 +42,8 @@ interface BrandingValue {
   name: string;
   logoUrl: string | null;
   colors: { brand: string; brandSoft: string; brandFg: string };
+  /** Font key understood by the client's FONT_STACKS (or a raw CSS font-family string). */
+  font: string | null;
   helpCenterTitle: string;
   humanPromise: string;
   emailFrom: string | null;
@@ -47,6 +63,7 @@ const brandingPutSchema = z.object({
       brandFg: z.string().min(1).optional(),
     })
     .optional(),
+  font: z.string().nullable().optional(),
   helpCenterTitle: z.string().nullable().optional(),
   humanPromise: z.string().nullable().optional(),
   emailFrom: z.string().email().nullable().optional(),
@@ -58,6 +75,7 @@ function withBrandingDefaults(stored: StoredBranding): BrandingValue {
     name,
     logoUrl: stored.logoUrl ?? null,
     colors: { ...DEFAULT_COLORS, ...(stored.colors ?? {}) },
+    font: stored.font?.trim() || null,
     helpCenterTitle: stored.helpCenterTitle || `${name} Help Center`,
     humanPromise: stored.humanPromise || DEFAULT_HUMAN_PROMISE,
     emailFrom: stored.emailFrom ?? null,
@@ -72,6 +90,120 @@ async function loadBranding(): Promise<BrandingValue> {
     .limit(1);
   return withBrandingDefaults((rows[0]?.value ?? {}) as StoredBranding);
 }
+
+// ---- Email templates ----
+
+interface TemplateVariable {
+  name: string;
+  description: string;
+}
+
+/** The {{vars}} each template supports — surfaced to the editor as clickable chips. */
+const TEMPLATE_VARIABLES: Record<string, TemplateVariable[]> = {
+  ticket_receipt: [
+    { name: 'customer.name', description: "The requester's name" },
+    { name: 'ticket.number', description: 'Human-friendly ticket number' },
+    { name: 'ticket.subject', description: 'Ticket subject line' },
+    { name: 'promise', description: 'The human response promise, e.g. " by tomorrow 9:00 AM (your local time)"' },
+    { name: 'brand.name', description: 'Your brand name' },
+  ],
+  agent_reply: [
+    { name: 'reply.body', description: "The agent's reply text" },
+    { name: 'agent.name', description: "The replying agent's real name" },
+    { name: 'agent.titleLine', description: "The agent's title on its own line (empty when unset)" },
+    { name: 'ticket.number', description: 'Human-friendly ticket number' },
+    { name: 'ticket.subject', description: 'Ticket subject line' },
+    { name: 'brand.name', description: 'Your brand name' },
+  ],
+  staff_invite: [
+    { name: 'invite.name', description: "The invitee's name" },
+    { name: 'invite.role', description: 'The role they were invited as' },
+    { name: 'invite.url', description: 'The accept-invite link' },
+    { name: 'brand.name', description: 'Your brand name' },
+  ],
+  sla_alert: [
+    { name: 'ticket.number', description: 'Human-friendly ticket number' },
+    { name: 'ticket.subject', description: 'Ticket subject line' },
+    { name: 'ticket.url', description: 'Link to the ticket for staff' },
+    { name: 'alert.kind', description: "'warning' or 'breached'" },
+    { name: 'alert.detail', description: 'One-line explanation of the alert' },
+    { name: 'brand.name', description: 'Your brand name' },
+  ],
+  csat_request: [
+    { name: 'customer.name', description: "The requester's name" },
+    { name: 'ticket.number', description: 'Human-friendly ticket number' },
+    { name: 'ticket.subject', description: 'Ticket subject line' },
+    { name: 'agent.name', description: 'The agent who solved the ticket' },
+    { name: 'csat.url', description: 'The satisfaction survey link (customer portal)' },
+    { name: 'brand.name', description: 'Your brand name' },
+  ],
+};
+
+/** Representative values for test sends — brand.name is filled from real branding at send time. */
+const SAMPLE_VARS: Record<string, Record<string, string | number>> = {
+  ticket_receipt: {
+    'customer.name': 'Alex Sample',
+    'ticket.number': 1042,
+    'ticket.subject': 'Cannot sign in to my account',
+    promise: ' by tomorrow 9:00 AM (your local time)',
+  },
+  agent_reply: {
+    'reply.body': "Thanks for the details — I've reset your session and you should be able to sign in now. Let me know if anything still looks off.",
+    'agent.name': 'Sam Agent',
+    'agent.titleLine': '\nSupport Engineer',
+    'ticket.number': 1042,
+    'ticket.subject': 'Cannot sign in to my account',
+  },
+  staff_invite: {
+    'invite.name': 'Jordan New',
+    'invite.role': 'agent',
+    'invite.url': 'https://example.com/accept-invite?token=sample',
+  },
+  sla_alert: {
+    'ticket.number': 1042,
+    'ticket.subject': 'Cannot sign in to my account',
+    'ticket.url': 'https://example.com/tickets/sample',
+    'alert.kind': 'warning',
+    'alert.detail': 'The first_response SLA target is due in about 30 minutes.',
+  },
+  csat_request: {
+    'customer.name': 'Alex Sample',
+    'ticket.number': 1042,
+    'ticket.subject': 'Cannot sign in to my account',
+    'agent.name': 'Sam Agent',
+    'csat.url': 'https://example.com/portal/tickets/sample',
+  },
+};
+
+type TemplateOverrides = Record<string, Partial<EmailTemplate>>;
+
+async function loadTemplateOverrides(): Promise<TemplateOverrides> {
+  const rows = await db
+    .select()
+    .from(schema.settings)
+    .where(eq(schema.settings.key, 'emailTemplates'))
+    .limit(1);
+  return (rows[0]?.value ?? {}) as TemplateOverrides;
+}
+
+function resolveTemplate(
+  key: string,
+  overrides: TemplateOverrides
+): { subject: string; body: string; isDefault: boolean } {
+  const fallback = DEFAULT_TEMPLATES[key]!;
+  const o = overrides[key];
+  const isDefault = !o || (!o.subject && !o.body);
+  return {
+    subject: o?.subject || fallback.subject,
+    body: o?.body || fallback.body,
+    isDefault,
+  };
+}
+
+const templatePutSchema = z.object({
+  subject: z.string(),
+  body: z.string(),
+});
 
 // ---- Automations ----
 
@@ -116,6 +248,7 @@ const synonymCreateSchema = z.object({
 
 export default async function routes(app: FastifyInstance): Promise<void> {
   registerAutomationEngine();
+  registerNotifications(app);
 
   // ---- Branding / white-label ----
 
@@ -126,6 +259,7 @@ export default async function routes(app: FastifyInstance): Promise<void> {
       name: b.name,
       logoUrl: b.logoUrl,
       colors: b.colors,
+      font: b.font,
       helpCenterTitle: b.helpCenterTitle,
       humanPromise: b.humanPromise,
     };
@@ -140,6 +274,7 @@ export default async function routes(app: FastifyInstance): Promise<void> {
       name: body.name,
       logoUrl: body.logoUrl ?? null,
       colors: body.colors ?? null,
+      font: body.font ?? null,
       helpCenterTitle: body.helpCenterTitle ?? undefined,
       humanPromise: body.humanPromise ?? undefined,
       emailFrom: body.emailFrom ?? null,
@@ -152,6 +287,64 @@ export default async function routes(app: FastifyInstance): Promise<void> {
         set: { value, updatedAt: new Date() },
       });
     return value;
+  });
+
+  // ---- Email templates ----
+
+  app.get('/email-templates', { preHandler: requireAdmin }, async () => {
+    const overrides = await loadTemplateOverrides();
+    const templates: Record<string, { subject: string; body: string; isDefault: boolean }> = {};
+    for (const key of Object.keys(DEFAULT_TEMPLATES)) {
+      templates[key] = resolveTemplate(key, overrides);
+    }
+    return { templates, variables: TEMPLATE_VARIABLES };
+  });
+
+  // PUT /email-templates/:key — empty subject AND body reset the template to its default.
+  app.put('/email-templates/:key', { preHandler: requireAdmin }, async (req) => {
+    const { key } = req.params as { key: string };
+    if (!DEFAULT_TEMPLATES[key]) throw notFound('Email template');
+    const body = parse(templatePutSchema, req.body);
+    const subject = body.subject.trim();
+    const text = body.body.trim();
+
+    const overrides = await loadTemplateOverrides();
+    if (!subject && !text) {
+      delete overrides[key];
+    } else {
+      overrides[key] = { ...(subject ? { subject } : {}), ...(text ? { body: text } : {}) };
+    }
+    await db
+      .insert(schema.settings)
+      .values({ key: 'emailTemplates', value: overrides, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: schema.settings.key,
+        set: { value: overrides, updatedAt: new Date() },
+      });
+    return resolveTemplate(key, overrides);
+  });
+
+  // POST /email-templates/:key/test — send the template with sample data to the calling admin.
+  app.post('/email-templates/:key/test', { preHandler: requireAdmin }, async (req) => {
+    const { key } = req.params as { key: string };
+    if (!DEFAULT_TEMPLATES[key]) throw notFound('Email template');
+    const email = req.user!.email;
+    if (!email) throw badRequest('Your account has no email address to send the test to');
+    const branding = await loadBranding();
+    await sendTemplatedMail(key, email, {
+      ...(SAMPLE_VARS[key] ?? {}),
+      'brand.name': branding.name,
+    });
+    return { ok: true, to: email };
+  });
+
+  // ---- Alert / notification controls ----
+
+  app.get('/notifications', { preHandler: requireAdmin }, async () => loadNotificationSettings());
+
+  app.put('/notifications', { preHandler: requireAdmin }, async (req) => {
+    const body = parse(notificationsPutSchema, req.body);
+    return saveNotificationSettings(mergeNotificationSettings(body));
   });
 
   // ---- Automations ----

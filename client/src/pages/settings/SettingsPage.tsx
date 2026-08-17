@@ -6,11 +6,13 @@
  */
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import {
+  Bell,
   Braces,
   Building2,
   CalendarClock,
   Gauge,
   Mail,
+  MailOpen,
   Palette,
   Shuffle,
   Users,
@@ -20,12 +22,14 @@ import {
 import { useMe } from '@/lib/session';
 import { cx, PageHeader } from '@/lib/ui';
 import type { StaffRole } from './shared';
-import BrandingSection from './BrandingSection';
+import AppearanceSection from './AppearanceSection';
 import TeamSection from './TeamSection';
 import CompaniesSection from './CompaniesSection';
 import SchedulesSection from './SchedulesSection';
 import SlaPoliciesSection from './SlaPoliciesSection';
 import AutomationsSection from './AutomationsSection';
+import AlertsSection from './AlertsSection';
+import EmailTemplatesSection from './EmailTemplatesSection';
 import WebhooksSection from './WebhooksSection';
 import SnippetsSection from './SnippetsSection';
 import SynonymsSection from './SynonymsSection';
@@ -40,12 +44,14 @@ const TABS: {
   min: MinRole;
   Component: () => JSX.Element;
 }[] = [
-  { path: 'branding', label: 'Branding', icon: Palette, min: 'admin', Component: BrandingSection },
+  { path: 'branding', label: 'Appearance', icon: Palette, min: 'admin', Component: AppearanceSection },
   { path: 'team', label: 'Team', icon: Users, min: 'staff', Component: TeamSection },
   { path: 'companies', label: 'Companies', icon: Building2, min: 'staff', Component: CompaniesSection },
   { path: 'schedules', label: 'Schedules & Holidays', icon: CalendarClock, min: 'supervisor', Component: SchedulesSection },
   { path: 'sla', label: 'SLA Policies', icon: Gauge, min: 'supervisor', Component: SlaPoliciesSection },
   { path: 'automations', label: 'Automations', icon: Zap, min: 'supervisor', Component: AutomationsSection },
+  { path: 'alerts', label: 'Alerts', icon: Bell, min: 'admin', Component: AlertsSection },
+  { path: 'email-templates', label: 'Email templates', icon: MailOpen, min: 'admin', Component: EmailTemplatesSection },
   { path: 'webhooks', label: 'Webhooks', icon: Webhook, min: 'admin', Component: WebhooksSection },
   { path: 'snippets', label: 'Snippets', icon: Braces, min: 'staff', Component: SnippetsSection },
   { path: 'synonyms', label: 'Synonyms', icon: Shuffle, min: 'staff', Component: SynonymsSection },
@@ -68,15 +74,16 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader title="Settings" subtitle="Configure this install — every feature ships to everyone" />
-      <div className="flex items-start gap-6">
-        <nav className="w-52 shrink-0 space-y-0.5">
+      <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
+        {/* Sidebar on desktop; a horizontally scrolling strip at phone widths. */}
+        <nav className="w-full md:w-52 shrink-0 flex md:block gap-1 md:gap-0 overflow-x-auto md:overflow-visible pb-1 md:pb-0 md:space-y-0.5">
           {visible.map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
               className={({ isActive }) =>
                 cx(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium',
+                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap',
                   isActive ? 'bg-brand-soft text-brand' : 'text-gray-600 hover:bg-gray-100'
                 )
               }
