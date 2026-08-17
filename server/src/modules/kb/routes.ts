@@ -59,6 +59,8 @@ const articleCreateSchema = z.object({
   articleType: z.string().trim().max(40).nullable().optional(),
 });
 
+const fromTicketSchema = z.object({ ticketId: z.string().uuid() });
+
 const articlePatchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   body: z.string().max(200_000).optional(),
@@ -130,6 +132,14 @@ async function getArticle(id: string): Promise<Article> {
     .limit(1);
   if (!rows[0]) throw notFound('Article');
   return rows[0];
+}
+
+/** Conservative email-signature strip: cut at the first line that is exactly '--'. */
+function stripSignature(body: string): string {
+  const lines = body.split('\n');
+  const idx = lines.findIndex((line) => line.replace(/\r$/, '') === '--');
+  if (idx === -1) return body.trim();
+  return lines.slice(0, idx).join('\n').trim();
 }
 
 async function saveRevision(
@@ -283,6 +293,73 @@ export default async function routes(app: FastifyInstance): Promise<void> {
     const article = inserted[0]!;
     await saveRevision(article, req.user!.id, 'created');
     return article;
+  });
+
+  // Content loop: a solved conversation becomes a draft article — deterministically, no AI.
+  app.post('/articles/from-ticket', { preHandler: requireAgent }, async (req) => {
+    const { ticketId } = parse(fromTicketSchema, req.body);
+    const ticketRows = await db
+      .select()
+      .from(schema.tickets)
+      .where(eq(schema.tickets.id, ticketId))
+      .limit(1);
+    const ticket = ticketRows[0];
+    if (!ticket) throw notFound('Ticket');
+
+    const m = schema.ticketMessages;
+    const publicMessages = await db
+      .select({ body: m.body, authorKind: schema.users.kind })
+      .from(m)
+      .leftJoin(schema.users, eq(m.authorId, schema.users.id))
+      .where(and(eq(m.ticketId, ticketId), eq(m.kind, 'public')))
+      .orderBy(asc(m.createdAt));
+
+    const problem =
+      publicMessages.find((row) => row.authorKind === 'customer') ?? publicMessages[0];
+    const staffReplies = publicMessages.filter((row) => row.authorKind === 'staff');
+    const resolution = staffReplies[staffReplies.length - 1];
+    if (!problem || !resolution) {
+      throw badRequest('The ticket needs a customer message and a public staff reply first');
+    }
+
+    const brandId = await defaultBrandId();
+    const slug = await uniqueArticleSlug(ticket.subject, brandId);
+    const articleBody = [
+      '## Problem',
+      '',
+      stripSignature(problem.body),
+      '',
+      '## Resolution',
+      '',
+      stripSignature(resolution.body),
+      '',
+      '---',
+      `*Draft generated from ticket #${ticket.number} — rewrite for a general audience before publishing.*`,
+    ].join('\n');
+
+    const inserted = await db
+      .insert(a)
+      .values({
+        brandId,
+        slug,
+        title: ticket.subject,
+        body: articleBody,
+        // Internal until a human deliberately re-audiences it — never auto-expose ticket content.
+        audience: 'internal',
+        articleType: 'troubleshooting',
+        status: 'draft',
+        ownerId: req.user!.id,
+      })
+      .returning();
+    const article = inserted[0]!;
+    await saveRevision(article, req.user!.id, `created from ticket #${ticket.number}`);
+    await db.insert(schema.ticketEvents).values({
+      ticketId,
+      actorId: req.user!.id,
+      type: 'article_drafted',
+      data: { articleId: article.id, articleTitle: article.title },
+    });
+    return { articleId: article.id };
   });
 
   app.get('/articles/:id', { preHandler: requireStaff }, async (req) => {

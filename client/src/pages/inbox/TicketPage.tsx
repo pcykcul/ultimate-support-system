@@ -3,7 +3,7 @@
  * sidebar on the right. Collaborators are read-only — internal notes only, no mutations.
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   BookOpen,
   ChevronDown,
   Clock,
+  FilePlus2,
   GitMerge,
   Lock,
   Send,
@@ -55,6 +56,7 @@ import MergeModal from './MergeModal';
 
 export default function TicketPage() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: me } = useMe();
   const isCollaborator = me?.role === 'collaborator';
@@ -136,6 +138,12 @@ export default function TicketPage() {
     },
   });
 
+  const draftArticle = useMutation({
+    mutationFn: () =>
+      api.post<{ articleId: string }>('/api/kb/articles/from-ticket', { ticketId: id }),
+    onSuccess: (res) => navigate(`/kb/${res.articleId}`),
+  });
+
   if (isLoading) {
     return <div className="py-12 text-center text-sm text-gray-400">Loading ticket…</div>;
   }
@@ -152,6 +160,9 @@ export default function TicketPage() {
   const following = me ? isFollowing(followers, me.id) : false;
   const staff = (staffData?.items ?? []).filter((u) => u.active);
   const teams = teamsData?.items ?? [];
+  const hasPublicStaffReply = messages.some(
+    (m) => m.kind === 'public' && m.author?.kind === 'staff'
+  );
   const outsideHours =
     kind === 'public' &&
     body.trim() !== '' &&
@@ -468,6 +479,35 @@ export default function TicketPage() {
                   </Badge>
                 </Link>
               ))}
+            </Card>
+          )}
+
+          {/* Content loop: turn this resolution into a KB draft */}
+          {canAct && (
+            <Card className="p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
+                Knowledge base
+              </h3>
+              <Button
+                variant="secondary"
+                disabled={!hasPublicStaffReply || draftArticle.isPending}
+                onClick={() => draftArticle.mutate()}
+              >
+                <FilePlus2 size={14} />
+                Draft KB article from this ticket
+              </Button>
+              <p className="mt-1.5 text-xs text-gray-400">
+                {hasPublicStaffReply
+                  ? 'Creates an internal draft from the problem and its resolution.'
+                  : 'Available after the first public staff reply.'}
+              </p>
+              {draftArticle.isError && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  {draftArticle.error instanceof Error
+                    ? draftArticle.error.message
+                    : 'Could not create the draft.'}
+                </p>
+              )}
             </Card>
           )}
 
