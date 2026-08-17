@@ -23,7 +23,7 @@ export default function PortalLayout() {
   return (
     <div className="min-h-full bg-gray-50">
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
           <div className="flex items-center gap-2.5">
             {branding?.logoUrl ? (
               <img src={branding.logoUrl} alt="" className="h-8 w-8 rounded" />
@@ -34,7 +34,7 @@ export default function PortalLayout() {
             )}
             <span className="font-semibold">{branding?.name ?? 'Support'}</span>
           </div>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1 overflow-x-auto max-w-full">
             {[
               { to: '/portal', label: 'My tickets', end: true },
               { to: '/portal/new', label: 'New ticket' },
