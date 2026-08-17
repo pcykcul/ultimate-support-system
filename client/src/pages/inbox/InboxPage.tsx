@@ -199,7 +199,13 @@ export default function InboxPage() {
 
       {/* Queue */}
       <Card>
-        <div className={cx(ROW_GRID, 'py-2 border-b border-gray-100 text-[11px] uppercase tracking-wide text-gray-400')}>
+        <div
+          className={cx(
+            'hidden md:grid',
+            ROW_GRID,
+            'py-2 border-b border-gray-100 text-[11px] uppercase tracking-wide text-gray-400'
+          )}
+        >
           <span>#</span>
           <span>Subject</span>
           <span>Requester</span>
@@ -215,47 +221,70 @@ export default function InboxPage() {
           <EmptyState title="No tickets match" hint="Adjust the filters or search to widen the queue." />
         )}
 
-        {items.map((t, i) => (
-          <button
-            key={t.id}
-            ref={i === sel ? selRef : undefined}
-            onClick={() => navigate(`/tickets/${t.id}`)}
-            className={cx(
-              'w-full text-left border-b border-gray-100 last:border-b-0 py-2.5 transition-colors',
-              ROW_GRID,
-              i === sel ? 'bg-brand-soft' : 'hover:bg-gray-50'
-            )}
-          >
-            <span className="text-xs font-mono text-gray-400">#{t.number}</span>
-            <span className="min-w-0">
-              <span className="block text-sm font-medium text-gray-800 truncate">{t.subject}</span>
-              {t.tags.length > 0 && (
-                <span className="block text-[11px] text-gray-400 truncate">{t.tags.join(' · ')}</span>
+        {items.map((t, i) => {
+          const sla = t.nextSlaDueAt ? (
+            <Countdown due={t.nextSlaDueAt} />
+          ) : t.slaBreached ? (
+            <Badge color="red">Breached</Badge>
+          ) : (
+            <span className="text-xs text-gray-300">—</span>
+          );
+          return (
+            <button
+              key={t.id}
+              ref={i === sel ? selRef : undefined}
+              onClick={() => navigate(`/tickets/${t.id}`)}
+              className={cx(
+                'block w-full text-left border-b border-gray-100 last:border-b-0 transition-colors',
+                i === sel ? 'bg-brand-soft' : 'hover:bg-gray-50'
               )}
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm text-gray-700 truncate">{t.requester.name}</span>
-              {t.company && <span className="block text-[11px] text-gray-400 truncate">{t.company.name}</span>}
-            </span>
-            <span>
-              <StatusBadge status={t.status} />
-            </span>
-            <span>
-              <PriorityBadge priority={t.priority} />
-            </span>
-            <span className="text-xs text-gray-500 truncate">{t.assignee?.name ?? 'Unassigned'}</span>
-            <span>
-              {t.nextSlaDueAt ? (
-                <Countdown due={t.nextSlaDueAt} />
-              ) : t.slaBreached ? (
-                <Badge color="red">Breached</Badge>
-              ) : (
-                <span className="text-xs text-gray-300">—</span>
-              )}
-            </span>
-            <span className="text-xs text-gray-400 text-right">{timeAgo(t.updatedAt)}</span>
-          </button>
-        ))}
+            >
+              {/* Mobile: two-line card */}
+              <span className="md:hidden flex flex-col gap-1.5 px-3 py-3">
+                <span className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 text-sm font-medium text-gray-800">
+                    <span className="font-mono text-xs text-gray-400 mr-1.5">#{t.number}</span>
+                    {t.subject}
+                  </span>
+                  <span className="shrink-0">{sla}</span>
+                </span>
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+                  <span className="truncate max-w-[10rem]">
+                    {t.requester.name}
+                    {t.company ? ` · ${t.company.name}` : ''}
+                  </span>
+                  <StatusBadge status={t.status} />
+                  <PriorityBadge priority={t.priority} />
+                  <span className="ml-auto text-gray-400">{timeAgo(t.updatedAt)}</span>
+                </span>
+              </span>
+
+              {/* Desktop: grid row */}
+              <span className={cx('hidden md:grid py-2.5', ROW_GRID)}>
+                <span className="text-xs font-mono text-gray-400">#{t.number}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-800 truncate">{t.subject}</span>
+                  {t.tags.length > 0 && (
+                    <span className="block text-[11px] text-gray-400 truncate">{t.tags.join(' · ')}</span>
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm text-gray-700 truncate">{t.requester.name}</span>
+                  {t.company && <span className="block text-[11px] text-gray-400 truncate">{t.company.name}</span>}
+                </span>
+                <span>
+                  <StatusBadge status={t.status} />
+                </span>
+                <span>
+                  <PriorityBadge priority={t.priority} />
+                </span>
+                <span className="text-xs text-gray-500 truncate">{t.assignee?.name ?? 'Unassigned'}</span>
+                <span>{sla}</span>
+                <span className="text-xs text-gray-400 text-right">{timeAgo(t.updatedAt)}</span>
+              </span>
+            </button>
+          );
+        })}
 
         {total > 0 && (
           <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">

@@ -215,7 +215,7 @@ export default function TicketPage() {
         </div>
       </div>
 
-      <div className="flex gap-5 items-start">
+      <div className="flex flex-col lg:flex-row gap-5 items-stretch lg:items-start">
         {/* Conversation */}
         <div className="flex-1 min-w-0 space-y-3">
           {messages.map((m) => (
@@ -293,7 +293,7 @@ export default function TicketPage() {
         </div>
 
         {/* Sidebar */}
-        <aside className="w-80 shrink-0 space-y-3">
+        <aside className="w-full lg:w-80 shrink-0 space-y-3">
           {/* Requester */}
           <Card className="p-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">

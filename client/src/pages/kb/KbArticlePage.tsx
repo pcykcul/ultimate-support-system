@@ -242,7 +242,7 @@ export default function KbArticlePage() {
       </div>
       {actionError && <p className="mb-3 text-sm text-red-600">{actionError}</p>}
 
-      <div className="flex gap-4 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-start">
         {/* Editor + live preview */}
         <div className="flex-1 min-w-0">
           <div className="grid lg:grid-cols-2 gap-3">
@@ -310,7 +310,7 @@ export default function KbArticlePage() {
         </div>
 
         {/* Metadata sidebar */}
-        <aside className="w-64 shrink-0 space-y-4">
+        <aside className="w-full lg:w-64 shrink-0 space-y-4">
           <Card className="p-4 space-y-3">
             <SidebarField label="Category">
               <Select

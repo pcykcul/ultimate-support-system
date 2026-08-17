@@ -184,7 +184,7 @@ function ScheduleCard({ schedule, isAdmin }: { schedule: Schedule; isAdmin: bool
         )}
       </div>
 
-      <div className="grid grid-cols-[8rem_auto_auto_1fr] items-center gap-x-3 gap-y-1.5">
+      <div className="grid grid-cols-[6rem_auto_auto] sm:grid-cols-[8rem_auto_auto_1fr] items-center gap-x-2 sm:gap-x-3 gap-y-1.5">
         {rows.map((row, weekday) => (
           <WeekdayRow key={weekday} label={WEEKDAYS[weekday]} row={row} onChange={(p) => setRow(weekday, p)} />
         ))}

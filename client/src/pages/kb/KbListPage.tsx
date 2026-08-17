@@ -122,8 +122,8 @@ export default function KbListPage() {
         }
       />
 
-      <div className="flex gap-4 items-start">
-        <aside className="w-60 shrink-0">
+      <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-start">
+        <aside className="w-full md:w-60 shrink-0">
           <CategoryPanel
             categories={categories}
             isLoading={catsLoading}
@@ -161,6 +161,7 @@ export default function KbListPage() {
           <Card>
             <div
               className={cx(
+                'hidden md:grid',
                 ROW_GRID,
                 'py-2 border-b border-gray-100 text-[11px] uppercase tracking-wide text-gray-400'
               )}
@@ -191,42 +192,59 @@ export default function KbListPage() {
               />
             )}
 
-            {items.map((a, i) => (
-              <button
-                key={a.id}
-                ref={i === sel ? selRef : undefined}
-                onClick={() => navigate(`/kb/${a.id}`)}
-                className={cx(
-                  'w-full text-left border-b border-gray-100 last:border-b-0 py-2.5 transition-colors',
-                  ROW_GRID,
-                  i === sel ? 'bg-brand-soft' : 'hover:bg-gray-50'
-                )}
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-gray-800 truncate">{a.title}</span>
-                  {a.articleType && <span className="block text-[11px] text-gray-400">{a.articleType}</span>}
-                </span>
-                <span>
-                  <StatusBadge status={a.status} />
-                </span>
-                <span>
-                  <AudienceBadge audience={a.audience} />
-                </span>
-                <span className="text-xs text-gray-500 truncate">{a.owner?.name ?? '—'}</span>
-                <span>
-                  {a.stale ? (
-                    <Badge color="red">Needs review</Badge>
-                  ) : a.verifiedAt ? (
-                    <span className="text-xs text-green-700">✓ {timeAgo(a.verifiedAt)}</span>
-                  ) : (
-                    <span className="text-xs text-gray-300">—</span>
+            {items.map((a, i) => {
+              const verified = a.stale ? (
+                <Badge color="red">Needs review</Badge>
+              ) : a.verifiedAt ? (
+                <span className="text-xs text-green-700">✓ {timeAgo(a.verifiedAt)}</span>
+              ) : (
+                <span className="text-xs text-gray-300">—</span>
+              );
+              return (
+                <button
+                  key={a.id}
+                  ref={i === sel ? selRef : undefined}
+                  onClick={() => navigate(`/kb/${a.id}`)}
+                  className={cx(
+                    'block w-full text-left border-b border-gray-100 last:border-b-0 transition-colors',
+                    i === sel ? 'bg-brand-soft' : 'hover:bg-gray-50'
                   )}
-                </span>
-                <span className="text-xs text-gray-600 text-right">{feedbackPct(a.helpfulYes, a.helpfulNo)}</span>
-                <span className="text-xs text-gray-600 text-right">{a.viewCount}</span>
-                <span className="text-xs text-gray-400 text-right">{timeAgo(a.updatedAt)}</span>
-              </button>
-            ))}
+                >
+                  {/* Mobile: two-line card */}
+                  <span className="md:hidden flex flex-col gap-1.5 px-3 py-3">
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 text-sm font-medium text-gray-800">{a.title}</span>
+                      <span className="shrink-0">{verified}</span>
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+                      <StatusBadge status={a.status} />
+                      <AudienceBadge audience={a.audience} />
+                      <span>{feedbackPct(a.helpfulYes, a.helpfulNo)} helpful</span>
+                      <span className="ml-auto text-gray-400">{timeAgo(a.updatedAt)}</span>
+                    </span>
+                  </span>
+
+                  {/* Desktop: grid row */}
+                  <span className={cx('hidden md:grid py-2.5', ROW_GRID)}>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-gray-800 truncate">{a.title}</span>
+                      {a.articleType && <span className="block text-[11px] text-gray-400">{a.articleType}</span>}
+                    </span>
+                    <span>
+                      <StatusBadge status={a.status} />
+                    </span>
+                    <span>
+                      <AudienceBadge audience={a.audience} />
+                    </span>
+                    <span className="text-xs text-gray-500 truncate">{a.owner?.name ?? '—'}</span>
+                    <span>{verified}</span>
+                    <span className="text-xs text-gray-600 text-right">{feedbackPct(a.helpfulYes, a.helpfulNo)}</span>
+                    <span className="text-xs text-gray-600 text-right">{a.viewCount}</span>
+                    <span className="text-xs text-gray-400 text-right">{timeAgo(a.updatedAt)}</span>
+                  </span>
+                </button>
+              );
+            })}
           </Card>
           <p className="mt-2 text-[11px] text-gray-400">j/k navigate · Enter open</p>
         </div>

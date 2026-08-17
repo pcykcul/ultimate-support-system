@@ -66,7 +66,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     path.dirname(fileURLToPath(import.meta.url)),
     '../../client/dist'
   );
-  await app.register(fastifyStatic, { root: clientDist, wildcard: false });
+  // wildcard serving resolves files per-request, so client rebuilds (hashed filenames)
+  // never require a server restart; misses fall through to the SPA fallback below.
+  await app.register(fastifyStatic, { root: clientDist });
   app.setNotFoundHandler((req, reply) => {
     if (req.url.startsWith('/api/')) {
       return reply.status(404).send({ error: 'Not found' });
