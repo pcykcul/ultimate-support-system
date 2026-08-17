@@ -1,0 +1,50 @@
+# Knowledge Base Software: Competitive Research & Best Practices (August 2026)
+
+## 1. Market landscape and pricing (current numbers)
+
+- **Zendesk Guide** is not sold standalone — you must buy the full Zendesk Suite starting at **$55/agent/month**; a 20-agent team runs **$1,100–$2,300/month plus ~$1,000/month for AI add-ons**. Its content-reuse feature, **Content Blocks**, is **Enterprise-tier only**, capped at 5,000 blocks and 500 articles per block, and the Help Center API can't write article bodies containing content blocks (they flatten to inline text on update).
+- **Document360** killed its free plan in **November 2024** and moved to **sales-led, quote-based pricing with no published rates**, priced **per project (each KB = a separate subscription)** — multi-site costs multiply. AI Search ("Eddy AI") is gated to Business tier and up. Rated ~4.7/5 on G2 but reviewers cite editor lag with hundreds of articles, messy content imports, and limited public-site customization.
+- **GitBook** (2026): Free (1 user, public docs) / **Premium $65/site/mo + $12/user/mo** (AI Answers, search analytics, custom domain) / **Ultimate $249/site/mo + $12/user** (AI Assistant with a ~500-answers soft cap, AI Insights) / Enterprise custom; an **Advanced AI Assistant add-on is $149/mo** for 1,000 answers and external embedding. Complaint themes: per-site cost multiplication, feature gating, unclear AI usage limits, weak customer-facing help-center features and thin search analytics.
+- **Intercom Articles** is bundled into Intercom seats (**Essential $39/seat/mo**), with **Fin AI billed at $0.99 per resolution** — teams report median deflection of **35–45%** on well-documented products, but the bill scales with customer volume, "great when volume is low and brutal when it spikes."
+- **Freshdesk**: Freddy AI Agent requires Pro ($49) or Enterprise ($79) plans, includes 500 AI sessions, then **$49 per 100 sessions** (2,000 sessions ≈ $735/mo extra). Freddy can **only train on Freshdesk's own KB** — no external docs/PDFs/websites — and handles only the first email in a thread.
+- **HelpDocs** (the "simple" incumbent): **$49–$219/mo**; even the top plan has **no SSO, no version control, a 3-KB cap**, and AI wrapped in a credit system users describe as "rationing." Extra custom domains are $20/mo each.
+- **Internal-KB/SOP tools**: Guru **$25/seat/mo annual with a 10-seat minimum** ($250/mo floor) — its differentiator is **card verification workflows** (SME re-certifies content on a schedule); Tettra **from $4/user** with a free tier; Slab **$6.67/user** (free under 10 users).
+
+**Actionable gap:** nobody currently offers *simple + complete*. HelpDocs is simple but missing versioning/SSO; Document360 is complete but sales-gated and per-project priced; Zendesk requires buying a whole suite. A transparent flat price with versioning, AI search, and unlimited KBs included would undercut all three.
+
+## 2. Complaint themes to design against
+
+- **Pricing opacity and AI metering** is the #1 cross-vendor complaint in 2026: quote-only pricing (Document360), per-resolution billing (Intercom $0.99), per-session billing (Freshdesk), AI credits (HelpDocs), per-site multiplication (GitBook). Reddit threads on Zendesk repeatedly cite costs that "feel reasonable at first" then balloon with agents, analytics, and AI.
+- **Editor friction**: Zendesk Guide's WYSIWYG "auto-corrects" input, has no Markdown in the article editor (promised since 2022; only Content Blocks support it), and image placement is painful. Document360 users report load times/lag at scale. GitBook is praised precisely for its clean editor + **Change Requests** (branch/review/merge for docs) and real-time collaboration.
+- **Notion-as-KB fails publicly**: public sharing leaks workspace structure, custom domains need workarounds, SEO metadata is limited, and search "returns competing pages" — a whole ecosystem of patch tools (HelpKit etc.) exists just to publish Notion as a help center. Lesson: people love Notion's *editing*, not its *publishing*.
+- **KB↔AI lock-in**: Freddy trains only on Freshdesk KB; Zendesk AI add-ons cost ~$1k/mo extra. Third parties (eesel, My AskAI, Macha) exist purely to bolt better AI onto incumbent KBs — evidence the native AI is under-delivering.
+- **Localization is a maintenance trap**: Zendesk stores each translation as a separate item and requires translating sections/categories too; stale translations and missing hreflang annotations are common. No incumbent auto-flags "source changed → these 6 locales are now outdated."
+
+## 3. Best practices worth copying (with named implementations)
+
+**Information architecture.** The consensus pattern is a shallow **category tree (max 3 levels; Document360 supports 6 but recommends fewer) + tags as a secondary facet**, never tags-only. Consistent titling, article types (how-to / FAQ / troubleshooting / reference), and explicit metadata measurably improve both search and AI retrieval.
+
+**Search.** 2025–26 best practice is **hybrid search (keyword + semantic/vector)** with synonym dictionaries, typo tolerance, and instant results. Zero-result query tracking is the single highest-value analytics feature — Document360 ships "failed search tracking," GitBook gates search analytics behind Premium. Best practice: weekly export of top zero-result queries, deduplicated by intent, feeding a "write this article" queue.
+
+**Analytics/feedback.** The six metrics that matter: **ticket deflection rate, article feedback score ("Was this helpful?" %), zero-result search rate, contact-rate-after-article-view, time-to-resolution, and AI citation rate** (which articles the AI agent used to answer). Pair deflection with contact-after-view to verify deflections are real resolutions; high traffic + low deflection = content isn't solving the problem.
+
+**Versioning & workflow.** Document360's version control + approval workflows and GitBook's Change Requests are the benchmarks: draft → review → publish states, per-article revision history with diff/rollback, scheduled publishing, and **review reminders/verification** (Guru's card-verification model: assign an SME + expiry date; expired = flagged, and AI stops confidently citing stale content).
+
+**Content reuse.** Zendesk Content Blocks proves demand (one canonical snippet, auto-propagates to every article) but gating it to Enterprise with API limitations is a gift — ship snippets/variables (product names, prices, UI labels) at every tier.
+
+**KB↔ticket integration.** Zendesk's "Knowledge" context panel is the pattern: agents get **auto-suggested articles by ticket brand/language, one-click link/quote into replies, flag-as-outdated with feedback, and create-article-from-ticket** to fill gaps without leaving the workspace. GitBook's Agent goes further: it mines GitHub issues/Intercom tickets/Slack to propose documentation updates as change requests.
+
+**Public vs gated.** Table stakes in 2026: per-category visibility (public / logged-in customers / internal-only), so one authoring system serves the public KB, a gated customer KB, and internal SOPs. Zendesk does this via user segments; Document360 via RBAC with category-level permissions + private hosted KBs.
+
+## 4. What the ideal KB section looks like (spec-level)
+
+1. **One editor, three surfaces**: Notion-quality block editor with native Markdown shortcuts (type `/` or `#`), real-time co-editing and comments; the same article can be published to public help center, gated customer portal, or internal SOP space via an audience toggle — no separate products.
+2. **Categories (≤3 levels) + tags**, drag-and-drop tree manager, article templates by type, reusable snippets/variables at all tiers.
+3. **Versioning by default**: revision history + diff + rollback free; lightweight draft→review→publish workflow; per-article owner + verification expiry date (Guru model) — "unverified" badges internally, and AI answers deprioritize expired content.
+4. **Hybrid AI search** with synonyms and instant answers, plus a built-in **zero-result queue** that turns failed searches into article stubs. AI answering included in the flat price (predictable), with citation of source articles.
+5. **Feedback loop**: helpful/not-helpful widget with optional free-text on "no," contact-after-view tracking, and an agent-side flag button; a single "content health" dashboard (stale, low-rated, zero-result, high-traffic-low-deflection).
+6. **Agent panel in the ticket view**: suggested articles by ticket content/language, one-click insert (link or expanded text), flag/edit inline, create-article-from-resolved-ticket.
+7. **Localization**: machine-translate all locales from a canonical source, auto-flag locales as outdated when the source changes, translation-status dashboard, auto-hreflang.
+8. **Pricing posture**: published flat pricing, unlimited KBs/articles, SSO and versioning not paywalled, AI included with generous limits — directly attacking the metering resentment documented above.
+
+Sources: docsie.io (Document360 vs Zendesk Guide 2026), g2.com/products/document360/reviews, capterra.com (Document360, Zendesk Suite, HelpDocs), ferndesk.com (GitBook review/pricing, HelpDocs review), getmacha.com (Zendesk Reddit synthesis, Zendesk Content Blocks, Freddy AI), myaskai.com & gleap.io (Fin AI pricing), eesel.ai (Freshdesk AI, Zendesk Guide versioning/multi-brand, Notion review), knowledge-base.software (Notion limits, benchmarking, multilingual workflow), helpkit.so, support.zendesk.com (Content Blocks docs, Knowledge in Agent Workspace, Markdown community threads, localization), developer.zendesk.com (Content Blocks API limitations), document360.com/blog (IA best practices), saascrmreview.com (Document360 review), docsie.io (Guru/Tettra/Slab pricing Feb 2026), helpsite.com & helpguides.io (KB metrics).

@@ -1,0 +1,57 @@
+# SOP / Internal-Procedure Management: Competitive Research Report
+*Research date: August 2026. Angle: what an integrated SOP section inside a simpler Zendesk/Freshdesk killer should learn from the standalone SOP market.*
+
+## 1. The standalone SOP market: products and current pricing
+
+| Product | Model | Current pricing (2026) | Core mechanic |
+|---|---|---|---|
+| **Trainual** | Documentation + training/LMS | Core tier starts **$249/mo for 10 seats** (annual billing), +$3–5/extra seat by tier; sources also report a **$1,000 one-time implementation fee**; newer Train/Scale/Grow structure cited at $199/mo (≤50 employees) and $299/mo (≤100) | Subjects → topics → steps, assigned as trackable training |
+| **Process Street** | Runnable workflow/checklist engine | **No published prices as of May 2026** — Startup/Pro/Enterprise are all custom-quoted; historically ~$100/mo minimum ("$20/user" with forced 5-user minimum, per a G2 complaint). Since Aug 1, 2025, Admins, Builders *and* Users are all billable for new orgs | Templates run as checklist instances with conditional logic, approvals, "Cora" AI |
+| **SweetProcess** | SOP documentation | **$99/mo up to 20 active members**, +$5/mo per extra active member; 14-day trial, 30-day money-back | Procedures/processes/policies with revision tracking, SweetAI drafting |
+| **Scribe** | Screen-capture → step guide | Free Basic (web-only, branded, no PDF/HTML/Markdown export); **Pro Personal $25/seat/mo annual; Pro Team $13/seat/mo annual with 5-seat minimum** (~$65/mo effective entry) | Auto-generates screenshot step guides; "Pages" combine captures into full SOPs; approval workflows, HIPAA support |
+| **Tango** | Screen-capture + in-app guidance | **$22/user/mo (1–2 users) or $15/user/mo annual (3+)**; free tier cut to ~5 workflows, browser-only | Screenshots-only capture; pivoted toward in-app walkthrough overlays ("guidance") |
+| **Whale** | SOP + training + AI | Free plan; paid tiers reported **$99 → $299 → $699/mo**; AI metered by tokens (Team 25/mo, Scale 75/mo) consumed by AI drafting, quiz generation, video-to-SOP | Cards + assignments + quizzes |
+| **Guru** | Internal knowledge for agents | **$25/seat/mo with 10-seat minimum** (=$250/mo entry); Knowledge Agents gated to custom-priced Enterprise | Verified "cards" surfaced in-context via browser extension inside Zendesk etc. |
+| **Notion / Confluence** | Generic docs as SOPs | Notion free ≤10 users; Confluence free ≤10 users then $5.67/user/mo | Wiki pages, no execution layer |
+
+**Pricing takeaway:** the market clusters around ~$100–250/mo entry with seat minimums, opaque quotes (Process Street), implementation fees (Trainual), and metered AI (Whale, Guru). Reddit sentiment on Trainual: "For a small business, I think their pricing is wild." Transparent flat pricing (SweetProcess, Waybook at $99/mo for 20 seats) is explicitly marketed as a differentiator against Trainual/Process Street sales-call pricing.
+
+## 2. Feature anatomy — what "SOP software" actually means
+
+Five distinct capabilities, rarely all in one product:
+
+1. **Runnable checklists** (Process Street, Tallyfy): a template becomes an instance per run, with conditional branching, role-based task assignment, approvals, and audit trail. Pure-documentation tools (SweetProcess, Trainual, Notion) lack this "execution layer" — Tallyfy's whole marketing wedge against SweetProcess.
+2. **Capture** (Scribe, Tango): browser extension records clicks → auto-generated annotated screenshot steps. Neither can process existing video; Tango is browser-only on free tier, desktop capture requires Pro.
+3. **Version control + review cadence**: SweetProcess tracks revisions; Scribe has approval workflows; Notion has page history but "drift is the default unless someone owns it" — no ownership prompts or scheduled re-review. Guru's **verification workflow** (card owner gets periodic re-verify reminders; agents see a "verified" badge) is the best-in-class pattern here.
+4. **Acknowledgment/compliance tracking**: Trainual's moat — completion tracking, tests/quizzes, and **e-signature policy acknowledgment** (Pro tier+) producing signed, dated, audit-ready records.
+5. **Role-based assignment**: Trainual Pro auto-assigns training when someone is hired into a role; Whale assigns cards by role/team.
+
+## 3. Review complaint themes (G2/Capterra/Reddit/Product Hunt)
+
+- **Trainual:** clunky admin interface; "inconsistent search when you don't remember the exact document name"; excessive nudge emails; content updates not reflecting immediately; role-based paths take more configuration than expected; mobile app fine for consuming, bad for authoring.
+- **Process Street:** conditional logic "overwhelming," unmanageable at 50+ conditions; minimal analytics, limited filtering, no multi-field sorting; misleading/opaque pricing and escalating per-user cost; 2025 billing change made previously-free "Users" billable.
+- **SweetProcess:** thin native integrations (Zapier-only), limited text formatting ("info boxes" cramped), UI lag at scale — "simple SOP docs, no execution layer."
+- **Tango:** free-tier rug-pull ("limited to 5 workflows now is criminal"), no undo in editor, missed captures/inconsistent auto-zoom, no video, no branching logic.
+- **Whale:** AI token allotments exhausted "within a week" on paid plans.
+- **Notion-as-SOP failure mode:** no distinction between governed and informal content; duplicate pages; weak search → "once people cannot reliably find the right page, they stop trusting the system"; stores the doc but can't assign it, track completion, or trigger re-review.
+
+## 4. Why support teams keep SOPs outside their helpdesk today
+
+- **Helpdesk KBs are customer-artifact-shaped, not procedure-shaped.** Zendesk Guide internal knowledge requires user segments; **Suite Team ($55/agent) can't even restrict articles to agents-only** — that's gated to higher plans. Articles have no step/checklist structure, no acknowledgment, no role assignment, no run instances.
+- **No compliance layer.** Nothing in Zendesk/Freshdesk KB does e-signature acknowledgment, quizzes, or completion tracking — so ops buys Trainual anyway.
+- **The result is tab-switching.** Guru's entire $250/mo+ business is a browser extension that pastes an internal knowledge layer *on top of* Zendesk because the helpdesk lacks one.
+- **Zendesk's counter-move is AI-only:** **Agent Copilot "procedures"** — natural-language procedures that auto assist follows mid-ticket, suggesting next steps and API "actions" (daisy-chainable, can update ticket fields), with **per-version performance tracking and restore**. At Relate 2026 they added AI-generated procedures. But it requires **Suite Professional ($115/agent/mo) or Enterprise ($169) plus the $50/agent/mo Copilot add-on** — procedures as a luxury AI feature, not a first-class documentation surface humans read, own, and sign off on.
+
+## 5. What an integrated SOP section should be (actionable spec)
+
+- **Three content types, one system:** customer KB articles, internal reference (Guru-style verified cards), and **runnable SOPs** (checklist instances with assignee, due date, audit trail). Notion fails precisely because these blur together.
+- **Macro-linked procedures:** attach an SOP to a macro/canned reply — applying "Refund request" macro surfaces the refund runbook checklist in the ticket sidebar; ticket links to the SOP run for QA/audit. No competitor does this natively.
+- **Escalation runbooks triggered by ticket state:** SLA breach, priority=urgent, or "security" tag instantiates the matching runbook with role-assigned steps (agent, team lead, on-call engineer).
+- **Guru-style verification loop:** every SOP has an owner and a re-verify interval; stale SOPs get flagged in-product, not by email nudge spam (Trainual's most-hated behavior).
+- **Trainual-style acknowledgment without the LMS bloat:** assign SOP → require read + e-sign → dashboard of who's current. This is the #1 reason ops teams pay $249/mo elsewhere.
+- **Scribe-style capture built in** (extension → annotated steps) — table stakes now; both capture leaders are cheap ($13–15/seat) and hated for free-tier limits, so bundling uncapped capture is an easy win.
+- **Version control with diff + rollback + per-version usage stats** (Zendesk already ships this for AI procedures; do it for human-readable SOPs).
+- **Multi-tier visibility mapped to your user tiers:** end customers see KB; agents see KB + internal notes + playbooks; admins author/approve. Undercut Zendesk's plan-gating of agent-only content.
+- **Pricing wedge:** flat, published, no seat minimums, no implementation fee, unmetered AI — every incumbent violates at least two of these.
+
+**Sources:** [educate-me.co/trainual-pricing](https://www.educate-me.co/blog/trainual-pricing), [layer3labs.io/trainual-pricing](https://www.layer3labs.io/guides/trainual-pricing), [capterra.com/Trainual reviews](https://www.capterra.com/p/175749/Trainual/reviews/), [g2.com/trainual/reviews](https://www.g2.com/products/trainual/reviews), [lmschef.com/trainual-alternatives](https://lmschef.com/trainual-alternatives/), [microgaps.com trainual-alternative](https://www.microgaps.com/blog/trainual-alternative-small-teams-2026), [hackceleration.com/process-street](https://hackceleration.com/labs/review/process-street), [tallyfy.com/process-street-review](https://tallyfy.com/process-street-review/), [research.com/process-street](https://research.com/software/reviews/process-street), [sweetprocess.com/sweetprocess-pricing](https://www.sweetprocess.com/sweetprocess-pricing/), [tallyfy.com/sweetprocess-review](https://tallyfy.com/sweetprocess-review/), [supered.io/scribe-pricing](https://www.supered.io/blog/scribe-pricing/), [docsie.io scribe-vs-tango-pricing](https://www.docsie.io/vs/scribe-vs-tango-pricing/), [supered.io/tango-vs-scribe](https://www.supered.io/blog/tango-vs-scribe/), [clevera.ai/tango-alternatives](https://www.clevera.ai/blog/tango-alternatives), [producthunt.com Tango reviews](https://www.producthunt.com/products/tango-4/reviews), [toolradar.com/whale](https://toolradar.com/tools/whale), [staffgrid.net/whale](https://staffgrid.net/review/whale/), [trainual.com Notion evaluation](https://trainual.com/manual/how-to-evaluate-notion-for-sop-management), [talantir.ai Notion mistakes](https://talantir.ai/en/knowledge/guides/notion-common-mistakes-why-teams-fail-to-adopt-69bc5cf1a1399202fd0ec1ef), [happysupport.ai/guru-pricing](https://www.happysupport.ai/en/blog/guru-pricing), [bunnydesk.ai/guru-ai-review](https://bunnydesk.ai/blog/guru-ai-review/), [internalnote.com Copilot deep dive](https://internalnote.com/deep-dive-into-zendesk-agent-copilot-actions-and-procedures/), [eesel.ai zendesk-ai-copilot-add-on-pricing](https://www.eesel.ai/blog/zendesk-ai-copilot-add-on-pricing), [support.zendesk.com 2025 recap](https://support.zendesk.com/hc/en-us/articles/10140103140122-2025-recap-What-s-new-in-Zendesk), [support.zendesk.com internal KB best practices](https://support.zendesk.com/hc/en-us/articles/4408821238938-Best-practices-for-creating-an-internal-knowledge-base), [trainual.com/pricing](https://trainual.com/pricing), [operandio.com/trainual-pricing](https://operandio.com/trainual-pricing/)
