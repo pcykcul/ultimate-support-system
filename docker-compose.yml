@@ -7,6 +7,7 @@ services:
       DATABASE_URL: postgres://uss:uss@db:5432/uss
       SESSION_SECRET: ${SESSION_SECRET:-dev-only-change-me}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}

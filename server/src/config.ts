@@ -11,6 +11,8 @@ export const config = {
     pass: process.env.SMTP_PASS ?? '',
     from: process.env.SMTP_FROM ?? 'Support <support@example.com>',
   },
+  /** Resend.com API key — when set, outbound email goes through Resend (takes priority over SMTP). */
+  resendApiKey: process.env.RESEND_API_KEY ?? '',
   inboundEmailSecret: process.env.INBOUND_EMAIL_SECRET ?? 'dev-only-change-me',
   isProduction: process.env.NODE_ENV === 'production',
 };

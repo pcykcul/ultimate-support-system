@@ -10,7 +10,7 @@ export default function PortalLayout() {
 
   useEffect(() => {
     if (branding) {
-      applyBrandColors(branding.colors);
+      applyBrandColors(branding.colors, branding.font);
       document.title = branding.helpCenterTitle || branding.name || 'Support';
     }
   }, [branding]);

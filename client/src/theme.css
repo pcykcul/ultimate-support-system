@@ -8,6 +8,11 @@
   --brand: 37 99 235; /* blue-600 */
   --brand-soft: 219 234 254; /* blue-100 */
   --brand-fg: 255 255 255;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
 }
 
 html,

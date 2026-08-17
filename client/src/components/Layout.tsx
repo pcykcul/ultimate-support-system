@@ -55,7 +55,7 @@ export default function Layout() {
 
   useEffect(() => {
     if (branding) {
-      applyBrandColors(branding.colors);
+      applyBrandColors(branding.colors, branding.font);
       document.title = branding.name || 'Support';
     }
   }, [branding]);
